@@ -16,9 +16,32 @@ DWG — закрытый формат. Плагин конвертирует `DW
 
 ## Установка
 
+Из GitHub (маркетплейс `dwg-tools` лежит в самом репозитории):
+
 ```bash
-claude --plugin-dir ./dwg-editor
+claude plugin marketplace add admproekt/dwg-editor
+claude plugin install dwg-editor@dwg-tools
 ```
+
+В десктопном приложении Claude Code: **+ → Plugins → Add plugin**, плагин `dwg-editor` из маркетплейса `dwg-tools`.
+Если маркетплейса в списке нет, добавьте его в `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "dwg-tools": { "source": { "source": "github", "repo": "admproekt/dwg-editor" } }
+  },
+  "enabledPlugins": { "dwg-editor@dwg-tools": true }
+}
+```
+
+Для разработки, из папки проекта:
+
+```bash
+claude --plugin-dir .
+```
+
+После установки Python или ODA File Converter перезапустите приложение, чтобы оно увидело обновлённый PATH.
 
 ## Использование
 
