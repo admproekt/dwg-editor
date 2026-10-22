@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dwg-editor": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/launch.py"]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "dwg-tools",
+  "description": "Локальный маркетплейс с плагином dwg-editor",
+  "owner": { "name": "Aleksei" },
+  "plugins": [
+    {
+      "name": "dwg-editor",
+      "source": ".",
+      "description": "Открытие, просмотр и редактирование чертежей DWG/DXF"
+    }
+  ]
+}
