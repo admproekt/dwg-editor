@@ -1,12 +1,17 @@
 {
   "name": "dwg-tools",
-  "description": "Локальный маркетплейс с плагином dwg-editor",
+  "description": "Маркетплейс с плагинами dwg-editor и 3d-editor",
   "owner": { "name": "Aleksei" },
   "plugins": [
     {
       "name": "dwg-editor",
       "source": ".",
       "description": "Открытие, просмотр и редактирование чертежей DWG/DXF"
+    },
+    {
+      "name": "3d-editor",
+      "source": "./plugins/3d-editor",
+      "description": "Работа с 3D-моделями и BIM: выбор движка по объекту и задаче (каркас)"
     }
   ]
 }
