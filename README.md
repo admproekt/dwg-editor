@@ -101,6 +101,7 @@ description: Use for AutoCAD floor plans (планы этажей): walls, doors
 | Правка | `modify_entity`, `move_entities`, `delete_entities`, `replace_text` |
 | Преобразования | `copy_entities`, `rotate_entities`, `scale_entities`, `mirror_entities` |
 | Слои | `set_layer_properties` (цвет, тип и вес линии, вкл/выкл, заморозка, блокировка, переименование), `delete_layer` |
+| Растяжение | `stretch_entities` (как STRETCH в AutoCAD), `close_gap` (вырезать полосу и сомкнуть края, например сузить плиту) |
 | Пакетные | `modify_entities`, `move_entities_each` (много объектов за один вызов, при ошибке чертёж не меняется) |
 | Движки | `engine_status` (что доступно на ПК; пока работает только ezdxf) |
 

@@ -23,6 +23,8 @@ from ezdxf.addons import odafc
 from ezdxf.math import Matrix44, Vec3
 from mcp.server.fastmcp import FastMCP
 
+import stretch as _stretch
+
 mcp = FastMCP("dwg-editor")
 
 Point = list[float]  # [x, y] или [x, y, z]
@@ -670,6 +672,46 @@ def mirror_entities(handles: list[str], p1: Point, p2: Point, keep_original: boo
         copies.append(c)
     _transform_all(s, [c.dxf.handle for c in copies], m)
     return _out({"copied": len(copies), "new_handles": [c.dxf.handle for c in copies]})
+
+
+# ---------------------------------------------------------------- растяжение и вырезание
+
+def _window(w: list[float], name: str) -> tuple[float, float, float, float]:
+    if len(w) != 4 or w[0] >= w[2] or w[1] >= w[3]:
+        raise ValueError(f"{name} должно быть [x0, y0, x1, y1], где x0 < x1 и y0 < y1")
+    return (float(w[0]), float(w[1]), float(w[2]), float(w[3]))
+
+
+@mcp.tool()
+def stretch_entities(window: list[float], dx: float, dy: float, dz: float = 0.0,
+                     exclude_handles: Optional[list[str]] = None, drawing: Optional[str] = None) -> str:
+    """Растянуть чертёж как STRETCH в AutoCAD: точки внутри окна window = [x0, y0, x1, y1] сдвигаются
+    на (dx, dy, dz). Объект целиком в окне переносится, пересекающий границу растягивается (сдвигаются
+    только его вершины в окне), остальные не меняются. Размеры пересчитываются, число на размере
+    обновляется. exclude_handles: объекты, которые трогать нельзя. Поддержаны LINE, LWPOLYLINE, POLYLINE,
+    ARC, CIRCLE, POINT, TEXT, MTEXT, INSERT, HATCH, DIMENSION, MULTILEADER; остальное пропускается и
+    перечисляется в skipped_types. Дуга, пересекающая границу окна, вызывает ошибку."""
+    s = _session(drawing)
+    res = _stretch.stretch(s.doc, _window(window, "window"), dx, dy, dz, exclude=exclude_handles or [])
+    s.dirty = True
+    return _out(res)
+
+
+@mcp.tool()
+def close_gap(region: list[float], axis: str, lo: float, hi: float,
+              exclude_handles: Optional[list[str]] = None, delete_inside: bool = True,
+              drawing: Optional[str] = None) -> str:
+    """Вырезать из области region = [x0, y0, x1, y1] полосу lo..hi по оси axis ('x' или 'y') и сомкнуть
+    края: обе части сдвигаются к полосе на (hi-lo)/2, пересекающие полосу объекты сокращаются на hi-lo,
+    объекты целиком внутри полосы удаляются (delete_inside). Так сужают плиту, ничего не растягивая в
+    середине: сначала проверьте, что в полосе нет нужного (список deleted после вызова), и исключите
+    такие объекты в exclude_handles. Объекты, частично попавшие в полосу, не меняются и возвращаются в
+    ambiguous: правьте их вручную. Выноска, остриё которой вне полосы, переносится целиком."""
+    s = _session(drawing)
+    res = _stretch.close_gap(s.doc, _window(region, "region"), axis, lo, hi,
+                             exclude=exclude_handles or [], delete_inside=delete_inside)
+    s.dirty = True
+    return _out(res)
 
 
 # ------------------------------------------------------------------- пакетные операции

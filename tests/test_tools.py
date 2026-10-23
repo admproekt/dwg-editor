@@ -208,5 +208,23 @@ class BulkTools(ToolTestCase):
         self.assertAlmostEqual(e.dxf.insert[0], 13)
 
 
+class StretchTools(ToolTestCase):
+    def test_stretch_entities_moves_part(self):
+        a = self.line([0, 0], [0, 100])
+        srv.stretch_entities([-10, 50, 10, 200], 0, -30)
+        self.assertAlmostEqual(self.ent(a).dxf.end[1], 70)
+        with self.assertRaises(ValueError):
+            srv.stretch_entities([10, 0, 0, 10], 0, 1)
+
+    def test_close_gap_tool(self):
+        a = self.line([0, 0], [100, 0])
+        inside = self.line([50, 5], [50, 6])
+        res = j(srv.close_gap([-10, -10, 200, 10], "x", 40, 60))
+        self.assertEqual(len(res["deleted"]), 1)
+        self.assertAlmostEqual(self.ent(a).dxf.start[0], 10)
+        self.assertAlmostEqual(self.ent(a).dxf.end[0], 90)
+        self.assertEqual(len(list(self.msp())), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
