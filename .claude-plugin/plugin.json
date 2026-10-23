@@ -1,6 +1,6 @@
 {
   "name": "dwg-editor",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Открытие, просмотр и редактирование чертежей AutoCAD DWG/DXF через MCP (ezdxf + ODA File Converter)",
   "author": { "name": "Aleksei" },
   "keywords": ["dwg", "dxf", "autocad", "cad", "drawing"]

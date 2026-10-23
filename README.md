@@ -99,6 +99,12 @@ description: Use for AutoCAD floor plans (планы этажей): walls, doors
 | Просмотр | `drawing_info`, `list_layers`, `list_entities`, `get_entity`, `render_preview` |
 | Создание | `add_layer`, `add_line`, `add_circle`, `add_arc`, `add_polyline`, `add_text`, `add_mtext`, `add_linear_dimension` |
 | Правка | `modify_entity`, `move_entities`, `delete_entities`, `replace_text` |
+| Преобразования | `copy_entities`, `rotate_entities`, `scale_entities`, `mirror_entities` |
+| Слои | `set_layer_properties` (цвет, тип и вес линии, вкл/выкл, заморозка, блокировка, переименование), `delete_layer` |
+| Пакетные | `modify_entities`, `move_entities_each` (много объектов за один вызов, при ошибке чертёж не меняется) |
+| Движки | `engine_status` (что доступно на ПК; пока работает только ezdxf) |
+
+Тесты инструментов на синтетических чертежах (без AutoCAD и ODA): из корня репозитория `python -m unittest discover -s tests -v` интерпретатором из окружения плагина.
 
 ## Ограничения
 
