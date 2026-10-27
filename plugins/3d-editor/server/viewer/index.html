@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Просмотр IFC</title>
+<style>
+  :root { --bg:#1f2430; --panel:#272c3a; --line:#3a4154; --fg:#e6e8ee; --muted:#9aa3b5; --acc:#f5a524; --hi:#e040fb; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px/1.4 system-ui, "Segoe UI", sans-serif; }
+  #app { display:grid; grid-template-columns: 220px 1fr 280px; height:100%; }
+  aside { background:var(--panel); border-color:var(--line); overflow:auto; padding:10px; }
+  #left { border-right:1px solid var(--line); }
+  #right { border-left:1px solid var(--line); display:flex; flex-direction:column; gap:10px; }
+  h3 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  #view { position:relative; min-width:0; }
+  canvas { display:block; width:100%; height:100%; }
+  label.row { display:flex; align-items:center; gap:6px; padding:2px 0; cursor:pointer; }
+  .sw { width:10px; height:10px; border-radius:2px; flex:none; }
+  .cnt { margin-left:auto; color:var(--muted); }
+  button { background:var(--acc); color:#1b1b1b; border:0; border-radius:6px; padding:6px 10px; font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:500; }
+  textarea { width:100%; min-height:70px; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px; font:inherit; resize:vertical; }
+  #info { font-size:12px; }
+  #info .k { color:var(--muted); }
+  #info table { width:100%; border-collapse:collapse; margin-top:4px; }
+  #info td { padding:1px 4px 1px 0; vertical-align:top; word-break:break-word; }
+  #toolbar { position:absolute; left:10px; top:10px; display:flex; gap:6px; }
+  #status { position:absolute; left:10px; bottom:10px; color:var(--muted); background:rgba(31,36,48,.8); padding:3px 8px; border-radius:6px; }
+  #err { color:#ff8a80; }
+  @media (max-width: 800px) { #app { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; } aside { display:none; } }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="left">
+    <h3>Классы</h3><div id="classes"></div>
+    <h3 style="margin-top:14px">Этажи</h3><div id="storeys"></div>
+  </aside>
+  <div id="view">
+    <div id="toolbar"><button id="fit">Показать всё</button><button id="clear" class="ghost">Снять выделение</button></div>
+    <div id="status">Загрузка…</div>
+  </div>
+  <aside id="right">
+    <div><h3>Выделено</h3><div id="info">Щёлкните по элементу. Shift добавляет в выделение.</div></div>
+    <div><h3>Замечание агенту</h3>
+      <textarea id="msg" placeholder="Например: сделать эти стены толщиной 200"></textarea>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:6px"><button id="send">Отправить</button><span id="sent" style="color:var(--muted)"></span></div>
+    </div>
+    <div id="hl" style="color:var(--hi)"></div>
+    <div id="err"></div>
+  </aside>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const token = new URLSearchParams(location.search).get('t') || '';
+const api = (p, opt) => fetch(p + (p.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(token), opt).then(r => { if (!r.ok) throw new Error(p + ': ' + r.status); return r.json(); });
+const $ = id => document.getElementById(id);
+const status = t => $('status').textContent = t;
+
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1f2430);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100000);
+camera.up.set(0, 0, 1);               // в IFC ось Z смотрит вверх
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445066, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(1, -1.5, 2); scene.add(sun);
+
+const items = new Map();   // GlobalId -> { mesh, edges, base, el }
+const root = new THREE.Group(); scene.add(root);
+let selected = new Set(), highlighted = new Set(), model = null, lastVersion = -1;
+const SEL = new THREE.Color(0xf5a524), HI = new THREE.Color(0xe040fb);
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+function paint(it) {
+  const col = selected.has(it.el.id) ? SEL : highlighted.has(it.el.id) ? HI : it.base;
+  it.mesh.material.color.copy(col);
+  it.mesh.material.emissive.set(selected.has(it.el.id) || highlighted.has(it.el.id) ? 0x222222 : 0x000000);
+}
+
+function fit() {
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const half = THREE.MathUtils.degToRad(camera.fov) / 2;
+  const dist = sphere.radius / Math.sin(Math.min(half, Math.atan(Math.tan(half) * camera.aspect))) * 1.15;
+  const dir = new THREE.Vector3(0.6, -0.9, 0.6).normalize();
+  controls.target.copy(sphere.center);
+  camera.position.copy(sphere.center).addScaledVector(dir, dist);
+  camera.near = dist / 1000; camera.far = dist * 20; camera.updateProjectionMatrix(); controls.update();
+}
+
+function buildFilters() {
+  const byClass = new Map(), byStorey = new Map();
+  for (const it of items.values()) {
+    const e = it.el;
+    (byClass.get(e.cls) || byClass.set(e.cls, []).get(e.cls)).push(it);
+    const s = e.storey || '(без этажа)';
+    (byStorey.get(s) || byStorey.set(s, []).get(s)).push(it);
+  }
+  const state = { cls: new Set(byClass.keys()), st: new Set(byStorey.keys()) };
+  const apply = () => { for (const it of items.values()) { const v = state.cls.has(it.el.cls) && state.st.has(it.el.storey || '(без этажа)'); it.mesh.visible = v; it.edges.visible = v; } };
+  const draw = (box, map, set, colorOf) => {
+    box.innerHTML = '';
+    for (const [name, arr] of [...map.entries()].sort()) {
+      const l = document.createElement('label'); l.className = 'row';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+      cb.onchange = () => { cb.checked ? set.add(name) : set.delete(name); apply(); };
+      const sw = document.createElement('span'); sw.className = 'sw';
+      if (colorOf) sw.style.background = '#' + colorOf(arr[0]).getHexString(); else sw.style.display = 'none';
+      const t = document.createElement('span'); t.textContent = name;
+      const n = document.createElement('span'); n.className = 'cnt'; n.textContent = arr.length;
+      l.append(cb, sw, t, n); box.appendChild(l);
+    }
+  };
+  draw($('classes'), byClass, state.cls, it => it.base);
+  draw($('storeys'), byStorey, state.st, null);
+}
+
+async function showInfo() {
+  const box = $('info');
+  if (!selected.size) { box.textContent = 'Щёлкните по элементу. Shift добавляет в выделение.'; return; }
+  const ids = [...selected];
+  if (ids.length > 1) { box.innerHTML = '<b>' + ids.length + ' элементов</b>'; return; }
+  try {
+    const d = await api('/api/element/' + ids[0]);
+    let h = '<b>' + (d.name || '(без имени)') + '</b><div class="k">' + d.class + (d.storey ? ' · ' + d.storey : '') + '</div><div class="k">' + d.id + '</div>';
+    for (const [ps, props] of Object.entries(d.psets || {})) {
+      h += '<table><tr><td colspan="2"><b>' + ps + '</b></td></tr>';
+      for (const [k, v] of Object.entries(props)) if (k !== 'id') h += '<tr><td class="k">' + k + '</td><td>' + (typeof v === 'object' ? JSON.stringify(v) : v) + '</td></tr>';
+      h += '</table>';
+    }
+    box.innerHTML = h;
+  } catch (e) { box.textContent = String(e); }
+}
+
+function setSelection(ids) {
+  selected = new Set(ids);
+  for (const it of items.values()) paint(it);
+  api('/api/selection', { method: 'POST', body: JSON.stringify({ ids: [...selected] }) }).catch(e => $('err').textContent = String(e));
+  showInfo();
+}
+
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects([...items.values()].filter(i => i.mesh.visible).map(i => i.mesh), false)[0];
+  if (!hit) { if (!e.shiftKey) setSelection([]); return; }
+  const id = hit.object.userData.id;
+  if (e.shiftKey) { const s = new Set(selected); s.has(id) ? s.delete(id) : s.add(id); setSelection([...s]); } else setSelection([id]);
+});
+$('fit').onclick = fit;
+$('clear').onclick = () => setSelection([]);
+$('send').onclick = async () => {
+  const text = $('msg').value.trim(); if (!text) return;
+  try { await api('/api/message', { method: 'POST', body: JSON.stringify({ text }) }); $('msg').value = ''; $('sent').textContent = 'Отправлено, напишите агенту в чат'; }
+  catch (e) { $('sent').textContent = String(e); }
+};
+
+async function poll() {
+  try {
+    const s = await api('/api/state');
+    if (s.version !== lastVersion) {
+      lastVersion = s.version; highlighted = new Set(s.highlight || []);
+      for (const it of items.values()) paint(it);
+      $('hl').textContent = highlighted.size ? 'Агент подсветил: ' + highlighted.size + (s.label ? ' · ' + s.label : '') : '';
+    }
+  } catch (e) { /* сервер недоступен: ждём */ }
+  setTimeout(poll, 1500);
+}
+
+(async () => {
+  try {
+    model = await api('/api/model');
+    for (const el of model.elements) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(el.v, 3));
+      g.setIndex(el.f); g.computeVertexNormals();
+      const base = new THREE.Color(el.color[0], el.color[1], el.color[2]);
+      const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: base, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+      mesh.userData.id = el.id;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), new THREE.LineBasicMaterial({ color: 0x0d0f14 }));
+      root.add(mesh, edges); items.set(el.id, { mesh, edges, base, el });
+    }
+    buildFilters(); fit(); status(model.file + ' · элементов: ' + items.size);
+  } catch (e) { status('Ошибка загрузки'); $('err').textContent = String(e); }
+  poll();
+  renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+})();
+</script>
+</body>
+</html>

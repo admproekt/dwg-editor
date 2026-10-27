@@ -1,6 +1,6 @@
 {
   "name": "3d-editor",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Работа с 3D-моделями и BIM: выбор движка (Fusion, Revit, Forma, Navisworks, файловый уровень) по объекту и задаче",
   "author": { "name": "Aleksei" },
   "keywords": ["3d", "bim", "fusion", "revit", "forma", "navisworks", "ifc"]

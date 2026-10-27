@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "3d-editor": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server/launch.py"]
+    }
+  }
+}
