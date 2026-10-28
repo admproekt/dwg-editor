@@ -21,7 +21,8 @@ def _matrix(x, y, z, angle_deg=0.0):
     return m
 
 
-def build_sample(path: str) -> str:
+def build_sample(path: str, offset=(0.0, 0.0, 0.0)) -> str:
+    ox, oy, oz = offset
     m = ifcopenshell.api.project.create_file(version="IFC4")
     proj = ifcopenshell.api.root.create_entity(m, ifc_class="IfcProject", name="Тестовый проект")
     ifcopenshell.api.unit.assign_unit(m)
@@ -42,7 +43,7 @@ def build_sample(path: str) -> str:
     rep = ifcopenshell.api.geometry.add_slab_representation(
         m, context=body, depth=0.3, polyline=[(0.0, 0.0), (12.36, 0.0), (12.36, 5.4), (0.0, 5.4)])
     ifcopenshell.api.geometry.assign_representation(m, product=slab, representation=rep)
-    ifcopenshell.api.geometry.edit_object_placement(m, product=slab, matrix=_matrix(0, 0, 0))
+    ifcopenshell.api.geometry.edit_object_placement(m, product=slab, matrix=_matrix(ox, oy, oz))
     ifcopenshell.api.spatial.assign_container(m, products=[slab], relating_structure=storeys[0])
     walls = ((12.36, 0, 0, 0), (5.4, 12.36, 0, 90), (12.36, 12.36, 5.4, 180), (5.4, 0, 5.4, 270))
     for k, (length, x, y, ang) in enumerate(walls):
@@ -50,7 +51,7 @@ def build_sample(path: str) -> str:
         r = ifcopenshell.api.geometry.add_wall_representation(m, context=body, length=length, height=3.0,
                                                               thickness=0.2)
         ifcopenshell.api.geometry.assign_representation(m, product=w, representation=r)
-        ifcopenshell.api.geometry.edit_object_placement(m, product=w, matrix=_matrix(x, y, 0.3, ang))
+        ifcopenshell.api.geometry.edit_object_placement(m, product=w, matrix=_matrix(x + ox, y + oy, 0.3 + oz, ang))
         ifcopenshell.api.spatial.assign_container(m, products=[w], relating_structure=storeys[0])
         ps = ifcopenshell.api.pset.add_pset(m, product=w, name="Pset_WallCommon")
         ifcopenshell.api.pset.edit_pset(m, pset=ps, properties={"IsExternal": True, "FireRating": "EI60"})

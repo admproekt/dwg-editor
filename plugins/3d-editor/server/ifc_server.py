@@ -40,6 +40,7 @@ class Model:
     path: Path
     file: Any
     meshes: Optional[list] = None  # кэш геометрии для просмотрщика
+    origin: tuple = (0.0, 0.0, 0.0)  # смещение: координаты просмотрщика = мировые минус origin
 
 
 @dataclass
@@ -80,6 +81,17 @@ def _storey_name(element) -> Optional[str]:
         return None
 
 
+def _is_spatial(e) -> bool:
+    """Площадка, здание, этаж и т.п. (в IFC2X3 это IfcSpatialStructureElement, в IFC4 IfcSpatialElement)."""
+    for cls in ("IfcSpatialStructureElement", "IfcSpatialElement", "IfcOpeningElement"):
+        try:
+            if e.is_a(cls):
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def _brief(e) -> dict:
     return {"global_id": e.GlobalId, "class": e.is_a(), "name": e.Name, "storey": _storey_name(e)}
 
@@ -117,7 +129,7 @@ def _summary(m: Model) -> dict:
     projects = f.by_type("IfcProject")
     counts: dict[str, int] = {}
     for e in f.by_type("IfcProduct"):
-        if e.is_a("IfcSpatialElement") or e.is_a("IfcOpeningElement"):
+        if _is_spatial(e):
             continue
         counts[e.is_a()] = counts.get(e.is_a(), 0) + 1
     storeys = []
@@ -155,7 +167,7 @@ def ifc_list_elements(ifc_class: Optional[str] = None, storey: Optional[str] = N
     cls = ifc_class or "IfcProduct"
     items = []
     for e in m.file.by_type(cls):
-        if e.is_a("IfcSpatialElement") or e.is_a("IfcOpeningElement"):
+        if _is_spatial(e):
             continue
         if name_contains and name_contains.lower() not in (e.Name or "").lower():
             continue
@@ -198,11 +210,14 @@ def _style_color(shape, cls: str) -> tuple:
 
 
 def _build_meshes(m: Model) -> list:
+    """Геометрия элементов для просмотрщика. Координаты пересчитываются к центру модели: у
+    площадок в проекции они порядка миллионов метров, а браузер считает в float32 (потеря точности)."""
     if m.meshes is not None:
         return m.meshes
+    import numpy as np
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
-    meshes = []
+    raw = []
     it = ifcopenshell.geom.iterator(settings, m.file, 1)
     if it.initialize():
         while True:
@@ -210,16 +225,25 @@ def _build_meshes(m: Model) -> list:
             try:
                 e = m.file.by_id(shape.id)
                 g = shape.geometry
-                verts = [round(float(v), 4) for v in g.verts]
-                meshes.append({
-                    "id": e.GlobalId, "cls": e.is_a(), "name": e.Name, "storey": _storey_name(e),
-                    "color": [round(c, 3) for c in _style_color(shape, e.is_a())],
-                    "v": verts, "f": list(g.faces),
-                })
+                raw.append((e, np.array(g.verts, dtype=float).reshape(-1, 3), list(g.faces),
+                            _style_color(shape, e.is_a())))
             except Exception:
                 pass
             if not it.next():
                 break
+    if raw:
+        centres = np.array([v.mean(axis=0) for _, v, _, _ in raw])
+        origin = np.median(centres, axis=0)
+    else:
+        origin = np.zeros(3)
+    m.origin = tuple(float(c) for c in origin)
+    meshes = []
+    for e, v, f, color in raw:
+        meshes.append({
+            "id": e.GlobalId, "cls": e.is_a(), "name": e.Name, "storey": _storey_name(e),
+            "color": [round(c, 3) for c in color],
+            "v": [round(float(x), 4) for x in (v - origin).ravel()], "f": f,
+        })
     m.meshes = meshes
     return meshes
 
@@ -253,8 +277,9 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._send(200, (VIEWER_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
             if url.path == "/api/model":
                 m = _model()
-                return self._send(200, json.dumps({"file": m.path.name, "elements": _build_meshes(m)},
-                                                  ensure_ascii=False).encode("utf-8"))
+                els = _build_meshes(m)
+                return self._send(200, json.dumps({"file": m.path.name, "origin": list(m.origin),
+                                                   "elements": els}, ensure_ascii=False).encode("utf-8"))
             if url.path == "/api/state":
                 with _LOCK:
                     body = {"version": VIEWER.version, "highlight": VIEWER.highlight,
@@ -318,7 +343,7 @@ def ifc_viewer_open() -> str:
     m = _model()
     meshes = _build_meshes(m)
     url = _ensure_server()
-    return _out({"url": url, "elements_with_geometry": len(meshes),
+    return _out({"url": url, "elements_with_geometry": len(meshes), "origin": list(m.origin),
                  "note": "Откройте url во встроенном браузере. Выделение и замечания читайте через "
                          "viewer_get_selection и viewer_get_messages."})
 

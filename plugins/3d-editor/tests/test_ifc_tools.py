@@ -72,6 +72,19 @@ class IfcTools(unittest.TestCase):
         with self.assertRaises(KeyError):
             srv.ifc_get_element("не-существует")
 
+    def test_ifc2x3_spatial_elements_are_not_counted(self):
+        import ifcopenshell
+        import ifcopenshell.guid
+        f = ifcopenshell.file(schema="IFC2X3")
+        for cls in ("IfcSite", "IfcBuilding", "IfcBuildingStorey", "IfcBuildingElementProxy"):
+            f.create_entity(cls, GlobalId=ifcopenshell.guid.new(), Name=cls)
+        path = str(Path(self.tmp.name) / "x23.ifc")
+        f.write(path)
+        s = j(srv.ifc_open(path))
+        self.assertEqual(s["elements_by_class"], {"IfcBuildingElementProxy": 1})
+        self.assertEqual(j(srv.ifc_list_elements())["total"], 1)
+        srv.ifc_open(self.path)
+
     def test_no_model(self):
         srv.ifc_close()
         with self.assertRaises(RuntimeError):
@@ -118,6 +131,17 @@ class ViewerServer(unittest.TestCase):
         xs = slab["v"][0::3]
         self.assertAlmostEqual(max(xs) - min(xs), 12.36, places=2)
         self.assertTrue(len(slab["f"]) % 3 == 0 and len(slab["color"]) == 3)
+
+    def test_large_coordinates_are_recentered(self):
+        far = ifc_samples.build_sample(str(Path(self.tmp.name) / "far.ifc"), offset=(2219200.0, 295580.0, 0.0))
+        srv.ifc_open(far)
+        info = j(srv.ifc_viewer_open())
+        self.assertGreater(info["origin"][0], 2219000.0)
+        data = j(self.get("/api/model").read().decode("utf-8"))
+        self.assertAlmostEqual(data["origin"][0], info["origin"][0])
+        xs = [x for e in data["elements"] for x in e["v"][0::3]]
+        self.assertLess(max(abs(x) for x in xs), 100.0)
+        srv.ifc_open(self.path)
 
     def test_viewer_page_served(self):
         html = self.get("/").read().decode("utf-8")
