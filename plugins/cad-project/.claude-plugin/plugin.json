@@ -1,0 +1,7 @@
+{
+  "name": "cad-project",
+  "version": "0.1.0",
+  "description": "Проекты инженера как git-репозитории: каркас папки, исходники с хэшем, журнал, стадии, коммиты. Основа для плагинов dwg-editor и 3d-editor",
+  "author": { "name": "Aleksei" },
+  "keywords": ["project", "git", "cad", "bim", "journal"]
+}

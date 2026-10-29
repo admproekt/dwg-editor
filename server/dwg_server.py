@@ -23,6 +23,7 @@ from ezdxf.addons import odafc
 from ezdxf.math import Matrix44, Vec3
 from mcp.server.fastmcp import FastMCP
 
+import projectref
 import stretch as _stretch
 
 mcp = FastMCP("dwg-editor")
@@ -82,7 +83,7 @@ CURRENT: Optional[str] = None
 
 
 def _key(path: str | Path) -> str:
-    return str(Path(path).expanduser().resolve())
+    return str(projectref.resolve(str(path)))
 
 
 def _session(drawing: Optional[str]) -> Session:
@@ -173,7 +174,7 @@ def open_drawing(path: str) -> str:
     """Открыть чертёж .dwg или .dxf. DWG конвертируется через ODA File Converter.
     Возвращает краткую сводку. Открытый чертёж становится текущим."""
     global CURRENT
-    p = Path(path).expanduser()
+    p = projectref.resolve(path)
     if not p.is_file():
         raise FileNotFoundError(f"Файл не найден: {p}")
     ext = p.suffix.lower()
@@ -277,7 +278,7 @@ def render_preview(output_png: Optional[str] = None, dpi: int = 150,
     from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 
     s = _session(drawing)
-    out = Path(output_png) if output_png else Path(tempfile.gettempdir()) / f"{s.source.stem}_preview.png"
+    out = projectref.resolve(output_png, write=True) if output_png else Path(tempfile.gettempdir()) / f"{s.source.stem}_preview.png"
     fig = plt.figure()
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_aspect("equal")
@@ -763,7 +764,7 @@ def save_drawing(output_path: Optional[str] = None, dwg_version: str = "R2018",
     """Сохранить чертёж. Без output_path перезаписывает исходный файл (для DWG рядом создаётся .bak).
     Формат определяется расширением .dwg/.dxf. dwg_version: R2000, R2004, R2007, R2010, R2013, R2018."""
     s = _session(drawing)
-    out = Path(output_path).expanduser() if output_path else s.source
+    out = projectref.resolve(str(output_path or s.source), write=True)
     out.parent.mkdir(parents=True, exist_ok=True)
     if out.exists() and out.resolve() == s.source and not out.with_suffix(out.suffix + ".bak").exists():
         shutil.copy2(out, out.with_suffix(out.suffix + ".bak"))

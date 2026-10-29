@@ -92,6 +92,65 @@ class IfcTools(unittest.TestCase):
         srv.ifc_open(self.path)
 
 
+class IfcEditing(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.path = ifc_samples.build_sample(str(Path(cls.tmp.name) / "sample.ifc"))
+
+    @classmethod
+    def tearDownClass(cls):
+        srv.ifc_close()
+        cls.tmp.cleanup()
+
+    def setUp(self):
+        srv.ifc_open(self.path)
+
+    def _wall_z(self, name):
+        import ifcopenshell.geom
+        import numpy as np
+        gid = j(srv.ifc_list_elements(name_contains=name))["elements"][0]["global_id"]
+        s = ifcopenshell.geom.settings()
+        s.set("use-world-coords", True)
+        v = np.array(ifcopenshell.geom.create_shape(s, srv._find(gid)).geometry.verts).reshape(-1, 3)
+        return gid, v.min(0)
+
+    def test_delete_and_save_as(self):
+        gid = j(srv.ifc_list_elements(name_contains="Стена 1"))["elements"][0]["global_id"]
+        r = j(srv.ifc_delete_elements([gid]))
+        self.assertEqual(r["count"], 1)
+        self.assertEqual(j(srv.ifc_list_elements(ifc_class="IfcWall"))["total"], 3)
+        out = str(Path(self.tmp.name) / "out" / "edited.ifc")
+        self.assertTrue(Path(j(srv.ifc_save_as(out))["saved"]).is_file())
+        srv.ifc_open(out)
+        self.assertEqual(j(srv.ifc_list_elements(ifc_class="IfcWall"))["total"], 3)
+        srv.ifc_open(self.path)
+        self.assertEqual(j(srv.ifc_list_elements(ifc_class="IfcWall"))["total"], 4)  # исходный файл цел
+
+    def test_delete_spatial_refused(self):
+        site = srv.MODEL.file.by_type("IfcSite")[0].GlobalId
+        with self.assertRaises(ValueError):
+            srv.ifc_delete_elements([site])
+
+    def test_move(self):
+        gid, before = self._wall_z("Стена 1")
+        srv.ifc_move_elements([gid], dx=10.0, dy=-2.0, dz=1000.0)
+        _, after = self._wall_z("Стена 1")
+        self.assertAlmostEqual(after[0] - before[0], 10.0, places=3)
+        self.assertAlmostEqual(after[1] - before[1], -2.0, places=3)
+        self.assertAlmostEqual(after[2] - before[2], 1000.0, places=3)
+
+    def test_save_as_refuses_source_and_existing(self):
+        with self.assertRaises(ValueError):
+            srv.ifc_save_as(self.path)
+        other = Path(self.tmp.name) / "other.ifc"
+        other.write_text("x")
+        with self.assertRaises(FileExistsError):
+            srv.ifc_save_as(str(other))
+        srv.ifc_save_as(str(other), overwrite=True)
+        self.assertGreater(other.stat().st_size, 10)
+
+
 class ViewerServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

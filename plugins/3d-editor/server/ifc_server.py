@@ -19,6 +19,8 @@ import ifcopenshell.geom
 import ifcopenshell.util.element as uel
 from mcp.server.fastmcp import FastMCP
 
+import projectref
+
 mcp = FastMCP("3d-editor")
 
 VIEWER_DIR = Path(__file__).resolve().parent / "viewer"
@@ -111,7 +113,7 @@ def ifc_open(path: str) -> str:
     """Открыть файл IFC и вернуть сводку: схема, проект, этажи, число элементов по классам.
     Открытая модель становится текущей (закрывает предыдущую)."""
     global MODEL
-    p = Path(path).expanduser()
+    p = projectref.resolve(path)
     if not p.is_file():
         raise FileNotFoundError(f"Файл не найден: {p}")
     if p.suffix.lower() != ".ifc":
@@ -386,6 +388,77 @@ def viewer_highlight(global_ids: list[str], label: str = "") -> str:
         VIEWER.highlight_label = label
         VIEWER.version += 1
     return f"Подсвечено элементов: {len(global_ids)}"
+
+
+# ------------------------------------------------------------------------------- правка
+
+def _touch(m: Model) -> None:
+    """После правки сбросить кэш геометрии и обновить просмотрщик."""
+    with _LOCK:
+        m.meshes = None
+        VIEWER.selection = []
+        VIEWER.highlight = []
+        VIEWER.version += 1
+
+
+@mcp.tool()
+def ifc_delete_elements(global_ids: list[str]) -> str:
+    """Удалить элементы из открытой модели в памяти (вместе с их геометрией, свойствами и связями).
+    Файл на диске не меняется до ifc_save_as. Возвращает список удалённых."""
+    import ifcopenshell.api.root
+
+    m = _model()
+    targets = [_find(g) for g in global_ids]
+    for e in targets:
+        if _is_spatial(e):
+            raise ValueError(f"{e.GlobalId} это пространственный элемент ({e.is_a()}), его удалять нельзя")
+    removed = [_brief(e) for e in targets]
+    for e in targets:
+        ifcopenshell.api.root.remove_product(m.file, product=e)
+    _touch(m)
+    return _out({"removed": removed, "count": len(removed)})
+
+
+@mcp.tool()
+def ifc_move_elements(global_ids: list[str], dx: float = 0.0, dy: float = 0.0, dz: float = 0.0) -> str:
+    """Сдвинуть элементы на (dx, dy, dz) метров в мировых координатах, независимо от единиц модели.
+    Меняется только размещение элемента, геометрия остаётся. Файл на диске не меняется до
+    ifc_save_as."""
+    import numpy as np
+    import ifcopenshell.api.geometry
+    import ifcopenshell.util.placement as upl
+    import ifcopenshell.util.unit as uunit
+
+    m = _model()
+    shift = np.eye(4)
+    shift[:3, 3] = np.array((dx, dy, dz)) / uunit.calculate_unit_scale(m.file)  # метры в единицы модели
+    moved = []
+    for g in global_ids:
+        e = _find(g)
+        if _is_spatial(e):
+            raise ValueError(f"{g} это пространственный элемент ({e.is_a()}), его сдвигать нельзя")
+        ifcopenshell.api.geometry.edit_object_placement(
+            m.file, product=e, matrix=shift @ upl.get_local_placement(e.ObjectPlacement), is_si=False)
+        moved.append(_brief(e))
+    _touch(m)
+    return _out({"moved": moved, "count": len(moved), "shift": [dx, dy, dz]})
+
+
+@mcp.tool()
+def ifc_save_as(path: str, overwrite: bool = False) -> str:
+    """Сохранить текущую модель в новый файл IFC. Исходный файл перезаписать нельзя; существующий
+    другой файл только при overwrite=true."""
+    m = _model()
+    p = projectref.resolve(path, write=True)
+    if p.suffix.lower() != ".ifc":
+        raise ValueError("Файл должен иметь расширение .ifc")
+    if p.resolve() == m.path:
+        raise ValueError("Исходный файл перезаписывать нельзя, укажите новое имя")
+    if p.exists() and not overwrite:
+        raise FileExistsError(f"Файл уже есть: {p}. Для замены передайте overwrite=true")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    m.file.write(str(p))
+    return _out({"saved": str(p.resolve()), "size_bytes": p.stat().st_size})
 
 
 if __name__ == "__main__":
