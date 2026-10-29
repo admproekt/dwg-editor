@@ -1,7 +1,9 @@
 {
   "name": "dwg-tools",
-  "description": "Маркетплейс с плагинами dwg-editor и 3d-editor",
-  "owner": { "name": "Aleksei" },
+  "description": "Маркетплейс с плагинами cad-project, dwg-editor и 3d-editor",
+  "owner": {
+    "name": "Aleksei"
+  },
   "plugins": [
     {
       "name": "dwg-editor",
@@ -12,6 +14,11 @@
       "name": "3d-editor",
       "source": "./plugins/3d-editor",
       "description": "Работа с 3D-моделями и BIM: выбор движка по объекту и задаче (каркас)"
+    },
+    {
+      "name": "cad-project",
+      "source": "./plugins/cad-project",
+      "description": "Проекты инженера как git-репозитории: каркас, исходники с хэшем, журнал, стадии, коммиты"
     }
   ]
 }

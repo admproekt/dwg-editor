@@ -1,6 +1,13 @@
 ---
 name: dwg-editing
 description: Use when the user wants to open, inspect, preview or edit an AutoCAD drawing (.dwg or .dxf) — list layers/entities, add or change lines, circles, text, dimensions, replace text in a title block, then save back to DWG. Также для запросов «открой чертёж», «измени слой», «добавь размер», «замени текст в штампе».
+metadata:
+  kind: general
+  drawings: [any]
+  tools: [dwg-editor]
+  status: draft
+  version: 0.1.0
+  origin: dwg-editor
 ---
 
 # Работа с чертежами DWG/DXF

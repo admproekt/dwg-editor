@@ -1,6 +1,13 @@
 ---
 name: longitudinal-profile
 description: Use for AutoCAD drawings of a longitudinal profile of a route (продольный профиль трассы) with a section table below the profile — rows "Z-отметка, м" and "Расстояние, м", cells separated by vertical lines, depth labels along the profile line. Covers merging short table segments, removing labels at deleted boundaries and fixing overlapping labels. Также для запросов «подписи налезают друг на друга», «объедини короткие участки», «таблица сечения», «продольный профиль».
+metadata:
+  kind: editing
+  drawings: [longitudinal-profile]
+  tools: [dwg-editor]
+  status: draft
+  version: 0.1.0
+  origin: dwg-editor, образец 1-2.dwg
 ---
 
 # Продольный профиль трассы (DWG/DXF)

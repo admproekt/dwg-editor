@@ -1,6 +1,13 @@
 ---
 name: 3d-engine-selection
 description: Use when the user wants to open, inspect or change a 3D model or a BIM model (Fusion, Revit, Forma, Navisworks, IFC, STEP) and a choice of tool or engine is needed. Помогает выбрать движок по объекту и задаче. Также для запросов «3D модель», «BIM», «сборка», «коллизии», «модель здания».
+metadata:
+  kind: general
+  drawings: [any]
+  tools: [3d-editor]
+  status: draft
+  version: 0.1.0
+  origin: 3d-editor
 ---
 
 # Выбор движка для 3D и BIM

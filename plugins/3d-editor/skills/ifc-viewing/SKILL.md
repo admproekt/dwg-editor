@@ -1,6 +1,13 @@
 ---
 name: ifc-viewing
 description: Use when the user wants to open, inspect or look at an IFC file (BIM model) — list its storeys and elements, read properties, show the model in the browser, select elements and send remarks to the agent. Также для запросов «открой ifc», «покажи модель в браузере», «что в этой BIM-модели», «выдели стены».
+metadata:
+  kind: visualization
+  drawings: [any]
+  tools: [3d-editor]
+  status: draft
+  version: 0.1.0
+  origin: 3d-editor
 ---
 
 # Чтение и просмотр IFC

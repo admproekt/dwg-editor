@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "kinds": {
+    "general": "Общие правила работы",
+    "ingest": "Ввод чертежей и привязка",
+    "editing": "Правка чертежей",
+    "geometry": "Геометрия: оси, профили, поверхность, покрытия",
+    "modeling": "Моделирование (IFC, объекты)",
+    "qa": "Контроль качества: коллизии, проверки",
+    "visualization": "Визуализация, виды, рендер, видео",
+    "docs": "Документация и отчёты"
+  },
+  "drawings": {
+    "any": "Любой чертёж",
+    "general-plan": "Генеральный план",
+    "longitudinal-profile": "Продольный профиль",
+    "cross-section": "Поперечные профили и типовые сечения",
+    "vertical-planning": "Вертикальная планировка",
+    "odd": "ОДД: знаки и разметка",
+    "statements": "Ведомости и таблицы",
+    "landscape-album": "Альбом благоустройства и парка"
+  },
+  "skills": [
+    {
+      "name": "longitudinal-profile",
+      "plugin": "dwg-editor",
+      "path": "skills/longitudinal-profile/SKILL.md",
+      "description": "Use for AutoCAD drawings of a longitudinal profile of a route (продольный профиль трассы) with a section table below the profile — rows \"Z-отметка, м\" and \"Расстояние, м\", cells separated by vertical lines, depth labels along the profile line. Covers merging short table segments, removing labels at deleted boundaries and fixing overlapping labels. Также для запросов «подписи налезают друг на друга», «объедини короткие участки», «таблица сечения», «продольный профиль».",
+      "kind": "editing",
+      "drawings": [
+        "longitudinal-profile"
+      ],
+      "tools": [
+        "dwg-editor"
+      ],
+      "status": "draft",
+      "version": "0.1.0",
+      "origin": "dwg-editor, образец 1-2.dwg",
+      "sha256": "0756144dee3e7c6384ebcc1b2892423b6845e7112446a3cee7e3a204d54763e3"
+    },
+    {
+      "name": "3d-engine-selection",
+      "plugin": "3d-editor",
+      "path": "plugins/3d-editor/skills/3d-engine-selection/SKILL.md",
+      "description": "Use when the user wants to open, inspect or change a 3D model or a BIM model (Fusion, Revit, Forma, Navisworks, IFC, STEP) and a choice of tool or engine is needed. Помогает выбрать движок по объекту и задаче. Также для запросов «3D модель», «BIM», «сборка», «коллизии», «модель здания».",
+      "kind": "general",
+      "drawings": [
+        "any"
+      ],
+      "tools": [
+        "3d-editor"
+      ],
+      "status": "draft",
+      "version": "0.1.0",
+      "origin": "3d-editor",
+      "sha256": "f7bb9e06b5e3adbfdada5725346e472d9554615f93046e17861264cc20555b4b"
+    },
+    {
+      "name": "dwg-editing",
+      "plugin": "dwg-editor",
+      "path": "skills/dwg-editing/SKILL.md",
+      "description": "Use when the user wants to open, inspect, preview or edit an AutoCAD drawing (.dwg or .dxf) — list layers/entities, add or change lines, circles, text, dimensions, replace text in a title block, then save back to DWG. Также для запросов «открой чертёж», «измени слой», «добавь размер», «замени текст в штампе».",
+      "kind": "general",
+      "drawings": [
+        "any"
+      ],
+      "tools": [
+        "dwg-editor"
+      ],
+      "status": "draft",
+      "version": "0.1.0",
+      "origin": "dwg-editor",
+      "sha256": "1f6eeaabf8db20dcbe86d004a8ccfa51c905b070afdcbb3630398e9986100052"
+    },
+    {
+      "name": "project-workflow",
+      "plugin": "cad-project",
+      "path": "plugins/cad-project/skills/project-workflow/SKILL.md",
+      "description": "Use whenever the user works inside an engineering project folder (a folder with project.json, a git repository of drawings, models and sources) or asks to create, open, check or commit a project, add source drawings, record decisions, mark stages. Также «создай проект», «открой проект», «внеси исходник», «запиши в журнал», «закоммить», «в какой мы стадии».",
+      "kind": "general",
+      "drawings": [
+        "any"
+      ],
+      "tools": [
+        "cad-project"
+      ],
+      "status": "draft",
+      "version": "0.1.0",
+      "origin": "cad-project",
+      "sha256": "3da37e714cb87bc7ab5979336ab279754796f8250ed561b27e373aadbf88cffb"
+    },
+    {
+      "name": "ifc-viewing",
+      "plugin": "3d-editor",
+      "path": "plugins/3d-editor/skills/ifc-viewing/SKILL.md",
+      "description": "Use when the user wants to open, inspect or look at an IFC file (BIM model) — list its storeys and elements, read properties, show the model in the browser, select elements and send remarks to the agent. Также для запросов «открой ifc», «покажи модель в браузере», «что в этой BIM-модели», «выдели стены».",
+      "kind": "visualization",
+      "drawings": [
+        "any"
+      ],
+      "tools": [
+        "3d-editor"
+      ],
+      "status": "draft",
+      "version": "0.1.0",
+      "origin": "3d-editor",
+      "sha256": "d9b6c7942cbdb33627a17ebbbddd583dbcb0e20a64f46f137c7a282d0289540d"
+    }
+  ]
+}
