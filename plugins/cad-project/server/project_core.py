@@ -247,7 +247,7 @@ def add_source(root: Path, file: str, role: str = "other", note: str = "", copy:
             "added": _now(), "from": str(src), "external": not copy}
     reg["items"].append(item)
     reg_f.write_text(json.dumps(reg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return {"added": True, **item}
+    return {**item, "added": True}
 
 
 def list_sources(root: Path) -> list:
