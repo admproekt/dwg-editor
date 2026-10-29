@@ -149,6 +149,82 @@ class JournalGit(Base):
         self.assertEqual(pc.status(root)["git"]["changed"], 0)
 
 
+class Server(Base):
+    """«Сервер» — пустой bare-репозиторий в временной папке."""
+
+    def bare(self, name="srv.git"):
+        d = self.base / name
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(d)], check=True)
+        return str(d)
+
+    def test_publish_clone_roundtrip(self):
+        root, _ = self.new(kind="road")
+        (root / "work" / "s.py").write_text("print(1)\n", encoding="utf-8")
+        pc.commit(root, "Скрипт")
+        pc.tag(root, "v1")
+        url = self.bare()
+        r = pc.publish_project(root, url)
+        self.assertTrue(r["pushed"] and r["remote_added"])
+        rem = pc.status(root)["git"]["remote"]
+        self.assertEqual((rem["url"], rem["ahead"], rem["behind"]), (url, 0, 0))
+        self.assertIn("v1", subprocess.run(["git", "-C", url, "tag"], capture_output=True, text=True).stdout)
+        again = pc.publish_project(root, url)
+        self.assertFalse(again["remote_added"])
+        c = pc.clone_project(url, str(self.base / "copy"))
+        self.assertEqual(c["sources"]["problems"], [])
+        self.assertEqual(Path(c["root"]), (self.base / "copy").resolve())
+        self.assertEqual(projectref.find_root(self.base), (self.base / "copy").resolve())
+        self.assertTrue((self.base / "copy" / "work" / "s.py").is_file())
+
+    @unittest.skipUnless(pc.have_lfs(), "нужен git-lfs")
+    def test_lfs_files_survive_the_trip(self):
+        root, _ = self.new()
+        f = self.base / "a.dwg"
+        f.write_bytes(b"DWG" * 5000)
+        pc.add_source(root, str(f), role="drawing")
+        pc.commit(root, "Исходник")
+        url = self.bare()
+        pc.publish_project(root, url)
+        c = pc.clone_project(url, str(self.base / "copy"))
+        self.assertEqual(c["sources"], {"ok": 1, "problems": []}, c["notes"])
+        self.assertEqual((self.base / "copy" / "sources" / "a.dwg").read_bytes(), b"DWG" * 5000)
+
+    def test_publish_guards(self):
+        root, _ = self.new()
+        with self.assertRaises(pc.ProjectError):
+            pc.publish_project(root, " ")
+        with self.assertRaises(pc.ProjectError):
+            pc.publish_project(root, str(self.base / "нет-такого.git"))
+        self.assertEqual(git_remotes(root), "")
+        pc.publish_project(root, self.bare("a.git"), push=False)
+        with self.assertRaises(pc.ProjectError):
+            pc.publish_project(root, self.bare("b.git"))
+
+    def test_clone_guards(self):
+        root, _ = self.new()
+        url = self.bare()
+        pc.publish_project(root, url)
+        full = self.base / "full"
+        full.mkdir()
+        (full / "x").write_text("1")
+        with self.assertRaises(pc.ProjectError):
+            pc.clone_project(url, str(full))
+        with self.assertRaises(pc.ProjectError):
+            pc.clone_project(url, str(root / "inner"))
+        notproject = self.bare("plain.git")
+        work = self.base / "plain"
+        subprocess.run(["git", "init", "-q", "-b", "main", str(work)], check=True)
+        subprocess.run(["git", "-C", str(work), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "x"], check=True)
+        subprocess.run(["git", "-C", str(work), "push", "-q", notproject, "main"], check=True)
+        with self.assertRaises(pc.ProjectError):
+            pc.clone_project(notproject, str(self.base / "np"))
+
+
+def git_remotes(root):
+    return pc.git(root, "remote", check=False)
+
+
 class Paths(Base):
     def test_resolve_rules(self):
         root, _ = self.new()

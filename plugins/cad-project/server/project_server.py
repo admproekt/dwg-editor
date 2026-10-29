@@ -106,6 +106,21 @@ def project_tag(name: str, message: str = "") -> str:
 
 
 @mcp.tool()
+def project_publish(url: str, remote: str = "origin", push: bool = True) -> str:
+    """Подключить проект к серверу git (например Gitea в локальной сети) и отправить ветку, теги и файлы LFS.
+    url: адрес пустого репозитория на сервере. push=false только подключает, не отправляя. Вызывайте только по
+    просьбе инженера: это отправка данных проекта на сервер. Первая отправка больших файлов бывает долгой."""
+    return _safe(lambda: pc.publish_project(_root(), url, remote, push))
+
+
+@mcp.tool()
+def project_clone(url: str, path: str, allow_nested: bool = False) -> str:
+    """Скопировать проект с сервера git в новую пустую папку (например C:\\Projects\\<имя>), скачать файлы LFS,
+    проверить исходники и сделать проект активным. Активный проект для этого не нужен."""
+    return _safe(pc.clone_project, url, path, allow_nested)
+
+
+@mcp.tool()
 def project_log(n: int = 10) -> str:
     """Последние коммиты проекта."""
     return _safe(lambda: pc.log(_root(), n))

@@ -317,7 +317,128 @@ def log(root: Path, n: int = 10) -> list:
     return [dict(zip(("commit", "date", "message"), l.split("|", 2))) for l in out.splitlines() if l]
 
 
+# ------------------------------------------------------------------------------ сервер (publish, clone)
+
+NET_TIMEOUT = 3 * 3600  # первая отправка больших файлов бывает долгой
+
+
+def _net(args: list, cwd: Optional[Path] = None) -> subprocess.CompletedProcess:
+    """git с обращением к серверу: без текстового запроса пароля (запрос покажет менеджер учётных данных)."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    try:
+        return subprocess.run(["git", "-c", "core.quotepath=false", *args], cwd=str(cwd) if cwd else None, env=env,
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=NET_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise ProjectError("git не ответил за отведённое время. Для первой отправки больших файлов выполните "
+                           "команду в терминале: git push -u origin main")
+
+
+def _net_fail(what: str, r: subprocess.CompletedProcess) -> ProjectError:
+    msg = (r.stderr or r.stdout).strip()
+    hint = ""
+    low = msg.lower()
+    if "authentication" in low or "could not read username" in low or "403" in low or "401" in low:
+        hint = " Войдите на сервер: выполните в терминале `git ls-remote <адрес>` и введите логин и токен, они запомнятся."
+    elif "could not resolve host" in low or "unable to access" in low or "connection" in low:
+        hint = " Проверьте адрес сервера, что он включён и порт открыт в брандмауэре."
+    elif "rejected" in low or "non-fast-forward" in low or "fetch first" in low:
+        hint = " На сервере уже есть другая история. Если репозиторий должен быть пустым, пересоздайте его без README."
+    return ProjectError(f"{what}: {msg}{hint}")
+
+
+def _uses_lfs(root: Path) -> bool:
+    f = root / ".gitattributes"
+    return f.is_file() and "filter=lfs" in f.read_text(encoding="utf-8", errors="replace")
+
+
+def publish_project(root: Path, url: str, remote: str = "origin", push: bool = True) -> dict:
+    """Подключить сервер и отправить текущую ветку (и теги). Файлы LFS уходят вместе с отправкой."""
+    url = url.strip()
+    if not url:
+        raise ProjectError("Нужен адрес репозитория на сервере, например http://сервер:3000/проект/имя.git")
+    if _uses_lfs(root) and not have_lfs():
+        raise ProjectError("В проекте большие файлы идут через Git LFS, а git-lfs не найден. "
+                           "Установите git-lfs (winget install GitHub.GitLFS) и повторите.")
+    branch = git(root, "branch", "--show-current", check=False)
+    if not branch:
+        raise ProjectError("Нет текущей ветки (отсоединённый HEAD). Переключитесь на main.")
+    cur = git(root, "remote", "get-url", remote, check=False)
+    if cur and cur != url:
+        raise ProjectError(f"Удалённый «{remote}» уже указывает на {cur}. Чтобы сменить: "
+                           f"git remote set-url {remote} {url}")
+    r = _net(["ls-remote", url])
+    if r.returncode != 0:
+        raise _net_fail("Сервер недоступен или нет доступа", r)
+    added = not cur
+    if added:
+        git(root, "remote", "add", remote, url)
+    out = {"remote": remote, "url": url, "branch": branch, "remote_added": added, "pushed": False,
+           "uncommitted": len(git(root, "status", "--porcelain", check=False).splitlines())}
+    if not push:
+        return out
+    if _uses_lfs(root):
+        git(root, "lfs", "install", "--local")
+    r = _net(["push", "-u", remote, branch], cwd=root)
+    if r.returncode != 0:
+        raise _net_fail("Отправка не удалась", r)
+    if git(root, "tag", "--list", check=False):
+        r = _net(["push", remote, "--tags"], cwd=root)
+        if r.returncode != 0:
+            raise _net_fail("Ветка отправлена, теги нет", r)
+    out["pushed"] = True
+    out["lfs"] = _uses_lfs(root)
+    if out["uncommitted"]:
+        out["note"] = f"Не закоммичено файлов: {out['uncommitted']}. На сервер ушло только закоммиченное."
+    return out
+
+
+def clone_project(url: str, path: str, allow_nested: bool = False) -> dict:
+    """Скопировать проект с сервера в папку, подтянуть файлы LFS, сделать проект активным."""
+    if not have_git():
+        raise ProjectError("Не найден git. Установите git (winget install Git.Git) и перезапустите приложение.")
+    url = url.strip()
+    if not url:
+        raise ProjectError("Нужен адрес репозитория на сервере")
+    dest = Path(path).expanduser().resolve()
+    if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
+        raise ProjectError(f"Папка не пуста: {dest}. Выберите новую, например C:\\Projects\\<имя>.")
+    top = _toplevel(dest)
+    if top is not None and not allow_nested:
+        raise ProjectError(f"Папка внутри другого git-репозитория ({top}). Выберите папку вне него.")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    r = _net(["clone", url, str(dest)], cwd=dest.parent)
+    if r.returncode != 0:
+        raise _net_fail("Не удалось скопировать проект", r)
+    notes = []
+    if _uses_lfs(dest):
+        if have_lfs():
+            git(dest, "lfs", "install", "--local")
+            r = _net(["lfs", "pull"], cwd=dest)
+            if r.returncode != 0:
+                notes.append(f"Файлы LFS не скачались: {(r.stderr or r.stdout).strip()}. Повторите: git lfs pull")
+        else:
+            notes.append("git-lfs не найден: большие файлы остались заглушками. Установите git-lfs и выполните git lfs pull.")
+    if not (dest / projectref.MARKER).is_file():
+        raise ProjectError(f"Скопировано в {dest}, но это не проект cad-project: нет {projectref.MARKER}.")
+    ident = _ensure_identity(dest)
+    if ident:
+        notes.append(ident)
+    projectref.set_active(dest)
+    return {"root": str(dest), "sources": verify_sources(dest), "notes": notes, "status": status(dest)}
+
+
 # ------------------------------------------------------------------------------ статус
+
+def _remote_info(root: Path) -> dict:
+    url = git(root, "remote", "get-url", "origin", check=False)
+    if not url:
+        return {"url": None}
+    info = {"url": url}
+    ab = git(root, "rev-list", "--left-right", "--count", "@{u}...HEAD", check=False).split()
+    if len(ab) == 2:
+        info["behind"], info["ahead"] = int(ab[0]), int(ab[1])
+    return info
+
 
 def status(root: Path) -> dict:
     p = _read(root)
@@ -329,7 +450,7 @@ def status(root: Path) -> dict:
         "stages": [f"{s['id']}: {s['status']}" for s in p["stages"]],
         "next_stage": nxt["id"] if nxt else None,
         "git": {"branch": git(root, "branch", "--show-current", check=False), "changed": len(ch),
-                "changed_sample": [l[3:] for l in ch[:8]], "last": log(root, 5)},
+                "changed_sample": [l[3:] for l in ch[:8]], "last": log(root, 5), "remote": _remote_info(root)},
         "sources": len(list_sources(root)),
         "journal_last": journal_tail(root, 3),
         "skills": p.get("skills", []),
