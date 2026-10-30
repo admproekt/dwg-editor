@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "creativeclaw": {
+      "type": "http",
+      "url": "https://app.creativeclaw.co/mcp"
+    }
+  }
+}
